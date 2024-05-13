@@ -1,12 +1,43 @@
-from flask import Flask, jsonify, send_file, request
+from flask import Flask, jsonify, send_file, request, Response
 from flask_cors import CORS
 # from openslide import open_slide
 # from PIL import Image
-import os
+import os, sys, time
 import json
+
+from io import BytesIO
 
 app = Flask(__name__)
 CORS(app)
+
+
+
+
+os.environ['PYDEVD_WARN_SLOW_RESOLVE_TIMEOUT'] = '100.0'
+
+if getattr(sys, 'frozen', False):
+    # The application is running as a bundled executable
+    current_dir = os.path.dirname(sys.executable)
+else:
+    # The application is running as a script
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+#tile_viwer = os.path.join(current_dir, 'openslide-win64-20230414', 'bin')
+
+OPENSLIDE_PATH = r'C:\Users\mahar\OneDrive\Documents\Custom Applciation\openseadragon\server\openslide-bin-4.0.0.2-windows-x64\bin'
+# print(OPENSLIDE_PATH)
+if hasattr(os, 'add_dll_directory'):
+    # Python >= 3.8 on Windows
+    with os.add_dll_directory(OPENSLIDE_PATH):
+        import openslide
+else:
+    import openslide
+    
+    
+current_dir = os.path.dirname(os.path.abspath(__file__))
+dir = os.path.join(current_dir ,'static', 'tiles','CMU-1.ndpi')
+slide = openslide.open_slide(dir)
+    
+    
 
 def get_directories(path):
     dir_dict = { "name": os.path.basename(path), "type": "directory" }
@@ -16,6 +47,59 @@ def get_directories(path):
         for name in os.listdir(path)
     ]
     return dir_dict
+
+
+@app.route('/tile/<int:level>/<int:row>_<int:col>.jpeg')
+# @app.route('/tile/<level>/<int:col>/<int:row>')
+def tile(level, col, row):
+    # level = request.args.get('level')
+    # row = request.args.get('row')
+    # col = request.args.get('col')
+    # Calculate the tile dimensions
+    
+    # col= col + 1
+    # row = row + 1
+    
+    print(level, col, row)
+
+    # level = level - 8
+    
+    # if col == 0:
+    # level = 16 - level
+    levelArr, zoomLevel = calculate_values(level)
+    # level = level
+    # tile_width = slide.level_dimensions[level][0]
+    # tile_height = slide.level_dimensions[level][1]
+    tile_width = slide.level_dimensions[7][0]
+    tile_height = slide.level_dimensions[7][1]
+    
+
+    
+    # //if else condition for col and row
+    # if col <= 0:
+    #     col = 1 
+    # if row <= 0:
+    #     row = 1
+        
+    
+    # Read the tile image
+    tile = slide.read_region((col*tile_width , row *tile_height), 8, (tile_width, tile_height))
+    # tile = slide.read_region((col , row ), level, (tile_width, tile_height))
+    
+    # Convert the image data to JPEG format
+    output = BytesIO()
+    # tile_format = "jpeg"
+    # tile_bytes = tile.convert("RGB").tobytes(tile_format, "RGB")
+    tile.convert("RGB").save(output, format='JPEG')
+    tile_bytes = output.getvalue()
+    
+    return Response(tile_bytes, mimetype='image/jpeg')
+
+
+def calculate_values(input_value):
+    second_value = 18 - input_value
+    third_value = input_value - 8
+    return second_value, third_value
 
 @app.route('/get-directory-structure', methods=['GET'])
 def get_directory_structure():
@@ -136,4 +220,6 @@ def updateAnnotation():
 
 
 if __name__ == '__main__':
+    
+    # app.run(threaded=False)
     app.run(debug=True)
