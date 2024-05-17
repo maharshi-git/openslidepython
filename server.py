@@ -51,40 +51,29 @@ def get_directories(path):
 
 @app.route('/tile/<int:level>/<int:row>_<int:col>.jpeg')
 # @app.route('/tile/<level>/<int:col>/<int:row>')
-def tile(level, col, row):
-    # level = request.args.get('level')
-    # row = request.args.get('row')
-    # col = request.args.get('col')
-    # Calculate the tile dimensions
-    
-    # col= col + 1
-    # row = row + 1
+def tile(level, row, col):
     
     print(level, col, row)
+    
+    zoomDiff = 16 - level
 
-    # level = level - 8
+    print(slide.level_dimensions)
+    # level = level - 6
     
-    # if col == 0:
-    # level = 16 - level
-    levelArr, zoomLevel = calculate_values(level)
-    # level = level
-    # tile_width = slide.level_dimensions[level][0]
-    # tile_height = slide.level_dimensions[level][1]
-    tile_width = slide.level_dimensions[7][0]
-    tile_height = slide.level_dimensions[7][1]
+    slideNo = level - 7
     
-
+    tile_width = slide.level_dimensions[slideNo][0]
+    tile_height = slide.level_dimensions[slideNo][1]
     
-    # //if else condition for col and row
-    # if col <= 0:
-    #     col = 1 
-    # if row <= 0:
-    #     row = 1
-        
+ 
+    tile_width = tile_width // 100
     
-    # Read the tile image
-    tile = slide.read_region((col*tile_width , row *tile_height), 8, (tile_width, tile_height))
-    # tile = slide.read_region((col , row ), level, (tile_width, tile_height))
+  
+    
+    print('zoom', zoomDiff, 'level', level, 'row', row, 'col', col, 'tile_width', tile_width, 'slideNo', slideNo)
+    
+    # tile = slide.read_region((row*32640 ,col*32640), level, (510, 510)) #for level 6 the length and bredth is 800 and 596
+    tile = slide.read_region((row*510*tile_width ,col*510*tile_width), zoomDiff, (510, 510)) #for level 6 the length and bredth is 800 and 596
     
     # Convert the image data to JPEG format
     output = BytesIO()
@@ -94,7 +83,6 @@ def tile(level, col, row):
     tile_bytes = output.getvalue()
     
     return Response(tile_bytes, mimetype='image/jpeg')
-
 
 def calculate_values(input_value):
     second_value = 18 - input_value
