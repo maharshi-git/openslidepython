@@ -1,0 +1,386 @@
+from flask import Flask, jsonify, send_file, request, Response
+from flask_cors import CORS
+# from openslide import open_slide
+from PIL import Image
+import os, sys, time
+import json
+import xmltodict
+
+from io import BytesIO
+
+import xml.etree.ElementTree as ET
+import numpy as np
+
+app = Flask(__name__)
+CORS(app)
+
+
+
+
+
+os.environ['PYDEVD_WARN_SLOW_RESOLVE_TIMEOUT'] = '100.0'
+
+if getattr(sys, 'frozen', False):
+    # The application is running as a bundled executable
+    current_dir = os.path.dirname(sys.executable)
+else:
+    # The application is running as a script
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+#tile_viwer = os.path.join(current_dir, 'openslide-win64-20230414', 'bin')
+
+# OPENSLIDE_PATH = r'C:\Users\mahar\OneDrive\Documents\Custom Applciation\openseadragon\server\openslide-bin-4.0.0.2-windows-x64\bin'
+OPENSLIDE_PATH = r'C:\Users\mahar\OneDrive\Documents\Custom Applciation\openseadragon\server\openslide-bin-4.0.0.2-windows-x64\bin'
+# print(OPENSLIDE_PATH)
+if hasattr(os, 'add_dll_directory'):
+    # Python >= 3.8 on Windows
+    with os.add_dll_directory(OPENSLIDE_PATH):
+        import openslide
+        from openslide.deepzoom import DeepZoomGenerator
+else:
+    import openslide
+    from openslide.deepzoom import DeepZoomGenerator
+    
+    
+current_dir = os.path.dirname(os.path.abspath(__file__))
+# C:\Users\mahar\OneDrive\Documents\Custom Applciation\openseadragon\server\static\tiles\C23 - 4007 - 2049765 - LSIL.ndpi
+# dir = os.path.join(current_dir ,'static', 'tiles','CMU-1.ndpi')
+dir = os.path.join(current_dir ,'static', 'tiles','C23 - 4007 - 2049765 - LSIL.ndpi')
+slide = openslide.open_slide(dir)
+
+dzi = DeepZoomGenerator(slide, tile_size=254, overlap=1)
+
+
+
+    
+    
+
+def get_directories(path):
+    dir_dict = { "name": os.path.basename(path), "type": "directory" }
+    dir_dict["children"] = [
+        get_directories(os.path.join(path, name)) if os.path.isdir(os.path.join(path, name)) 
+        else { "name": name, "type": "file" } 
+        for name in os.listdir(path)
+    ]
+    return dir_dict
+
+@app.route('/tileSlide', methods=['GET'])
+def tileSlide():
+#     # Get the specified tile
+    annotations = read_file()
+    return annotations
+
+
+def read_file():
+    
+    filename = r'C:\Users\mahar\OneDrive\Documents\Custom Applciation\openseadragon\server\static\tiles\C23 - 4007 - 2049765 - LSIL.ndpi.ndpa'    
+    with open(filename, 'r') as file:
+        content = file.read()
+    data_dict = xmltodict.parse(content)  # Convert XML to OrderedDict
+    json_data = json.dumps(data_dict)  # Convert OrderedDict to JSON
+    # print(json_data)
+    return json_data
+
+@app.route('/tile/<int:level>/<int:row>_<int:col>.jpeg')
+def tile(level, row, col):
+    
+    # print(level, col, row)
+    
+    zoomDiff = 16 - level
+
+    print(slide.level_dimensions)
+    
+    slideNo = level - 7
+    
+    test = [(51200, 38144), (25600, 19072), (12800, 9536), (6400, 4768), (3200, 2384), (1600, 1192), (800, 596), (400, 298), (200, 149), (100, 74.5)]
+
+    
+    tile_width = test[slideNo][0]
+    # tile_width = slide.level_dimensions[slideNo][0]
+    
+ 
+    tile_width = tile_width // 100
+    
+    print(510*tile_width)
+    
+    # tile = slide.read_region((row*32640 ,col*32640), level, (510, 510)) #for level 6 the length and bredth is 800 and 596
+    # tile = slide.read_region((row*510*tile_width ,col*510*tile_width), zoomDiff, (510, 510)) #for level 6 the length and bredth is 800 and 596
+    tile = slide.read_region((row*510*tile_width ,col*510*tile_width), zoomDiff, (510, 510)) #for level 6 the length and bredth is 800 and 596
+    # tile = slide.read_region((row*30464 ,col*30464), zoomDiff, (510, 510)) #for level 6 the length and bredth is 800 and 596
+    
+    # Convert the image data to JPEG format
+    output = BytesIO()
+  
+    tile.convert("RGB").save(output, format='JPEG')
+    tile_bytes = output.getvalue()
+    
+    return Response(tile_bytes, mimetype='image/jpeg')
+
+
+def calculate_values(input_value):
+    second_value = 18 - input_value
+    third_value = input_value - 8
+    return second_value, third_value
+
+@app.route('/get-directory-structure', methods=['GET'])
+def get_directory_structure():
+    directories = get_directories(r'C:\Users\mahar\OneDrive\Documents\Custom Applciation\openseadragon\server\resources')
+    return jsonify(directories)
+
+
+@app.route('/getAnnotation', methods=['POST'])
+def getAnnotation():
+    print('api hit')
+    data = request.get_json()
+
+    try:
+        comment = data['body'][0]['value']
+    except:
+        comment = ''
+
+    try:
+        tags = data['body'][1]['value']
+    except:
+        tags = ''
+    
+    id = data['id']
+
+    try:
+        coordinates = data['target']['selector']['value']
+        _, pixel_values = coordinates.split(":")
+        x, y, width, height = pixel_values.split(",")
+        # x = float(x)
+        # y = float(y)
+        # width = float(width)
+        # height = float(height)
+    except:
+        coordinates = ''
+    
+    # print(comment, tags, x, y, width, height)
+    data = {
+        "id": id,
+        "comment": comment,
+        "tags": tags,
+        "coordinates": {
+            "x": x,
+            "y": y,
+            "width": width,
+            "height": height
+        }
+    }
+    
+    with open('annotation.json', 'r') as f:
+        try:
+            data_list = json.load(f)
+        except json.JSONDecodeError:
+            data_list = []
+            
+    data_list.append(data)
+    
+    with open('annotation.json', 'w') as f:
+        json.dump(data_list, f)
+    
+    if not data:
+        return jsonify({"message": "No JSON received"}), 400
+    return jsonify({"message": "JSON received"}), 200
+
+
+@app.route('/getSavedAnnotation', methods=['GET'])
+def getSavedAnnotation():
+    # return 'test'
+    with open('annotation.json', 'r') as f:
+        data = json.load(f)
+    return jsonify(data)
+
+@app.route('/deleteAnnotation', methods=['POST'])
+def deleteAnnotation():
+    data = request.get_json()
+    id = data['id']
+    with open('annotation.json', 'r') as f:
+        data_list = json.load(f)
+    
+    for i in range(len(data_list)):
+        if data_list[i]['id'] == id:
+            data_list.pop(i)
+            break
+    
+    with open('annotation.json', 'w') as f:
+        json.dump(data_list, f)
+    
+    return jsonify({"message": "Annotation deleted"}), 200
+
+@app.route('/updateAnnotation', methods=['POST'])
+def updateAnnotation():
+    data = request.get_json()
+    id = data['id']
+    comment = data['comment']
+    tags = data['tags']
+    coordinates = data['coordinates']
+    x = coordinates['x']
+    y = coordinates['y']
+    width = coordinates['width']
+    height = coordinates['height']
+    
+    with open('annotation.json', 'r') as f:
+        data_list = json.load(f)
+    
+    for i in range(len(data_list)):
+        if data_list[i]['id'] == id:
+            data_list[i]['comment'] = comment
+            data_list[i]['tags'] = tags
+            data_list[i]['coordinates']['x'] = x
+            data_list[i]['coordinates']['y'] = y
+            data_list[i]['coordinates']['width'] = width
+            data_list[i]['coordinates']['height'] = height
+            break
+    
+    with open('annotation.json', 'w') as f:
+        json.dump(data_list, f)
+    
+    return jsonify({"message": "Annotation updated"}), 200
+
+
+if __name__ == '__main__':
+    
+    # app.run(threaded=False)
+    app.run(debug=True)
+    
+    
+
+# def process(self,pred): 
+#     pred = ['predict0', 43785, 2074, 44031, 2363, '0', 'AGUS']
+#     title,x1,y1,x2,y2,id,cat = pred 
+    
+#     tile_anote = []                
+#     # centre of annotation in pixels
+#     cx = int((x1+x2)/2)  # int(gt[1])
+#     cy = int((y1+y2)/2)  # int(gt[2])        
+#     # centering the Groundtruth
+#     # xc, yc = self.tile_size/2, self.tile_size/2
+#     xc, yc = 512/2, 512/2
+#     left = int(cx - xc)
+#     top = int(cy - yc)        
+#     # slide = self.slideRead()
+#     level = slide.get_best_level_for_downsample(1.0 / 40)        
+#     im_roi = slide.read_region((left, top), level, (512, 512))
+#     file = im_roi.convert('RGB')
+#     np_img = np.array(file)
+#     # b & C adjustment 
+#     # np_img = self.get_bnc_adjusted(np_img,clip=self.adjust_bnc_clip)         
+#     np_img = self.get_bnc_adjusted(np_img,clip=0)         
+#     # if self.adjust_bnc:
+#     #     np_img = self.get_bnc_adjusted(np_img,clip=12)         
+
+#     tile_anote=[]
+#     tile_box = (left, top, left+self.tile_size, top + self.tile_size)
+#     tile_anote = self.update_SameTile_annotes(self.predict_list, tile_box, tile_anote)
+#     if self.show_rect_mark:
+#         for k in range(len(tile_anote)):
+#             # draw the predict            
+#             # np_img = self.extract_nucleus(tile_anote[k], np_img)
+#             np_img = self.plot_one_box(tile_anote[k], np_img, color=(0, 255, 0))  
+#     # np_img = self.write_tile_title(np_img, title , color=(255, 255, 255)) 
+#     # print(id)   
+#     return np_img,id,title,cat
+
+    
+# def get_box_list(nm_p=221):
+#         # tree = ET.parse(self.xml_path)
+#         tree = ET.parse('C:/Users/mahar/Downloads/C23 - 4525 - 2053698 N.ndpi\\C23 - 5090 2 HSIL.ndpi.ndpa')
+#         root = tree.getroot()
+#         x1, y1, x2, y2 = 0, 0, 0, 0
+#         box_list = []
+#         X_Reference, Y_Reference = get_referance(nm_p=nm_p)
+#         # X_Reference, Y_Reference = self.get_referance(nm_p=nm_p)
+#         for elem in root.iter():
+#             # print(elem.tag)
+#             if elem.tag == 'ndpviewstate':
+#                 title = elem.find('title').text
+#                 cat = ""
+#                 if elem.find('cat') != None:
+#                     cat = elem.find('cat').text
+                
+#                 # cx = int((int(elem.find('x').text) + X_Reference)/nm_p)
+#                 # cy = int((int(elem.find('y').text) + Y_Reference)/nm_p)
+#                 id = elem.get("id")   # MOD
+
+#             x = []
+#             y = []
+#             if elem.tag == 'pointlist':
+#                 for sub in elem.iter(tag='point'):
+#                     x.append(int(sub.find('x').text))
+#                     y.append(int(sub.find('y').text))
+#                 x1 = int((min(x) + X_Reference)/nm_p)
+#                 x2 = int((max(x) + X_Reference)/nm_p)
+#                 y1 = int((min(y) + Y_Reference)/nm_p)
+#                 y2 = int((max(y) + Y_Reference)/nm_p)
+#                 row = [title,x1, y1, x2, y2,id,cat]
+#                 if title.lower() != 'bg':
+#                     box_list.append(row)
+#         return box_list
+    
+    
+# def get_referance(nm_p):
+#     slide = slideRead()
+
+#     w = int(slide.properties.get('openslide.level[0].width'))
+#     h = int(slide.properties.get('openslide.level[0].height'))
+
+#     ImageCenter_X = (w/2)*nm_p
+#     ImageCenter_Y = (h/2)*nm_p
+
+#     OffSet_From_Image_Center_X = slide.properties.get(
+#         'hamamatsu.XOffsetFromSlideCentre')
+#     OffSet_From_Image_Center_Y = slide.properties.get(
+#         'hamamatsu.YOffsetFromSlideCentre')
+
+#     # print("offset from Img center units?", OffSet_From_Image_Center_X,OffSet_From_Image_Center_Y)
+
+#     X_Ref = float(ImageCenter_X) - float(OffSet_From_Image_Center_X)
+#     Y_Ref = float(ImageCenter_Y) - float(OffSet_From_Image_Center_Y)
+#     return X_Ref, Y_Ref
+
+
+# def slideRead():
+#     openslide_formats = [
+#         "svs",
+#         "tif",
+#         "vms",
+#         "vmu",
+#         "ndpi",
+#         "scn",
+#         "mrxs",
+#         "tiff",
+#         "svslide",
+#         "bif",
+#         "tif"
+#     ]
+    
+#     wsi_path = 'C:/Users/mahar/Downloads/C23 - 4525 - 2053698 N.ndpi\\C23 - 5090 2 HSIL.ndpi'
+       
+#     if wsi_path.split('.')[-1] in openslide_formats:
+#         try:
+#             slide = openslide.open_slide(wsi_path)
+#             return slide
+#         except openslide.OpenSlideError as e:
+#             raise Exception("Error: Failed to open slide.") from e
+#     else:
+#         raise ValueError("Unsupported slide format.")
+
+
+# def get_bnc_adjusted(self,img,clip=12):
+#     hista,histb = np.histogram(img,255)        
+#     total =0
+#     # n_rem= int((self.tile_size*self.tile_size*3*clip)/100)
+#     n_rem= int((262144)/100)
+#     for i in reversed(range(255)):
+#         total +=hista[i]
+#         if total > n_rem :
+#             cut_off = int(histb[i])
+#             break
+
+#     alpha = 255/(cut_off)    
+#     gamma = 0.8
+#     img_stretched = np.clip(alpha*img, 0, 255)
+#     img_gama =255 *pow((img_stretched/255),gamma)    
+#     return img_gama.astype('uint8')
+
