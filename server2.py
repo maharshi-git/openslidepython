@@ -70,6 +70,29 @@ def tileSlide():
     return annotations
 
 
+@app.route('/get_image/<annotNo>', methods=['GET'])
+def get_image(annotNo):
+ 
+    annotations = read_file()
+    
+    annotations = json.loads(annotations)
+    
+    annotObj = annotations['annotations']['ndpviewstate'][int(annotNo)]
+    
+    coordinateCentre = (annotObj['x'], annotObj['y'])
+    print(coordinateCentre)
+    
+    tile = slide.read_region((32640 ,32640), 0, (510, 510))
+    
+    output = BytesIO()
+  
+    tile.convert("RGB").save(output, format='JPEG')
+    tile_bytes = output.getvalue()
+    
+    return Response(tile_bytes, mimetype='image/jpeg')
+
+
+
 def read_file():
     
     filename = r'C:\Users\mahar\OneDrive\Documents\Custom Applciation\openseadragon\server\static\tiles\C23 - 4007 - 2049765 - LSIL.ndpi.ndpa'    
