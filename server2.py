@@ -11,8 +11,12 @@ from io import BytesIO
 import xml.etree.ElementTree as ET
 import numpy as np
 
+import csv
+
 app = Flask(__name__)
 CORS(app)
+
+# annotations = ''
 
 
 
@@ -66,31 +70,49 @@ def get_directories(path):
 @app.route('/tileSlide', methods=['GET'])
 def tileSlide():
 #     # Get the specified tile
-    annotations = read_file()
-    return annotations
-
-
-@app.route('/get_image/<annotNo>', methods=['GET'])
-def get_image(annotNo):
- 
-    annotations = read_file()
+    predict_list = get_box_list()
+    predictArr = []
     
-    annotations = json.loads(annotations)
+    for i in range(len(predict_list)):
+        title,x1,y1,x2,y2,id,cat = predict_list[i]
+        left = int(int((x1+x2)/2) - 255)
+        top = int(int((y1+y2)/2) - 255)
+        #add openSeaXCoord variable which is 1.628×10−5 x left
+        openSeaXCoord = 1.675e-5 * left
+        openSeaYCoord = 1.97e-5 * top
     
-    annotObj = annotations['annotations']['ndpviewstate'][int(annotNo)]
+        
+        predictArr.append({
+            "title": title,
+            "x1": x1,
+            "y1": y1,
+            "x2": x2,
+            "y2": y2,
+            "id": id,
+            "cat": cat,
+            "left": left,
+            "top": top,
+            "openSeaXCoord": openSeaXCoord,
+            "openSeaYCoord": openSeaYCoord
+        })
+        
     
-    coordinateCentre = (annotObj['x'], annotObj['y'])
-    print(coordinateCentre)
+        
+    returnObj = {"Predicts": predictArr}
     
-    tile = slide.read_region((32640 ,32640), 0, (510, 510))
+    with open('test.json', 'w') as f:
+        json.dump(returnObj, f)
     
-    output = BytesIO()
-  
-    tile.convert("RGB").save(output, format='JPEG')
-    tile_bytes = output.getvalue()
+    # dict_data = json.loads(returnObj)
+    # fields = dict_data[0].keys()
     
-    return Response(tile_bytes, mimetype='image/jpeg')
-
+    # with open('output.txt', 'w', newline='') as f_output:
+    #     csv_writer = csv.DictWriter(f_output, fieldnames=fields, delimiter='\t')
+    #     csv_writer.writeheader()
+    #     csv_writer.writerows(dict_data)
+    
+    # annotations = read_file()
+    return returnObj
 
 
 def read_file():
@@ -102,6 +124,51 @@ def read_file():
     json_data = json.dumps(data_dict)  # Convert OrderedDict to JSON
     # print(json_data)
     return json_data
+
+
+@app.route('/get_image/<annotNo>', methods=['GET'])
+def get_image(annotNo):
+    
+    # annotNo = 3
+    
+    predict_list = get_box_list()
+    
+    title,x1,y1,x2,y2,id,cat = predict_list[int(annotNo)]
+ 
+    # annotations = read_file()
+    
+    tile_anote = []                
+    # centre of annotation in pixels
+    cx = int((x1+x2)/2)  # int(gt[1])
+    cy = int((y1+y2)/2)  # int(gt[2])        
+    # centering the Groundtruth
+    xc, yc = 510/2, 510/2
+    left = int(cx - xc)
+    top = int(cy - yc)     
+    
+    # annotations = json.loads(annotations)
+    
+    # annotObj = annotations['annotations']['ndpviewstate'][int(annotNo)]
+    
+    # coordinateCentre = (annotObj['x'], annotObj['y'])
+    # print(coordinateCentre)
+    
+    # tile = slide.read_region((32640 ,32640), 0, (510, 510))
+    tile = slide.read_region((left ,top), 0, (510, 510))
+    
+    output = BytesIO()
+  
+    tile.convert("RGB").save(output, format='JPEG')
+    tile_bytes = output.getvalue()
+    
+    return Response(tile_bytes, mimetype='image/jpeg')
+
+# def readTile(annot):
+    
+#     centrCoord = annot['pointlist']['point']
+    
+#     image = slide.read_region((32640 ,32640), 6, (510, 510))
+#     return image
 
 @app.route('/tile/<int:level>/<int:row>_<int:col>.jpeg')
 def tile(level, row, col):
@@ -191,7 +258,7 @@ def getAnnotation():
         }
     }
     
-    with open('annotation.json', 'r') as f:
+    with open('annotation.json', r'C:\Users\mahar\OneDrive\Documents\Custom Applciation\openseadragon\server\annotation.json') as f:
         try:
             data_list = json.load(f)
         except json.JSONDecodeError:
@@ -261,11 +328,65 @@ def updateAnnotation():
     
     return jsonify({"message": "Annotation updated"}), 200
 
+def get_box_list(nm_p=221):
+        tree = ET.parse(r'C:\Users\mahar\OneDrive\Documents\Custom Applciation\openseadragon\server\static\tiles\C23 - 4007 - 2049765 - LSIL.ndpi.ndpa')
+        root = tree.getroot()
+        x1, y1, x2, y2 = 0, 0, 0, 0
+        box_list = []
+        X_Reference, Y_Reference = get_referance(nm_p=nm_p)
+        for elem in root.iter():
+            # print(elem.tag)
+            if elem.tag == 'ndpviewstate':
+                title = elem.find('title').text
+                cat = ""
+                if elem.find('cat') != None:
+                    cat = elem.find('cat').text
+                
+                # cx = int((int(elem.find('x').text) + X_Reference)/nm_p)
+                # cy = int((int(elem.find('y').text) + Y_Reference)/nm_p)
+                id = elem.get("id")   # MOD
+
+            x = []
+            y = []
+            if elem.tag == 'pointlist':
+                for sub in elem.iter(tag='point'):
+                    x.append(int(sub.find('x').text))
+                    y.append(int(sub.find('y').text))
+                x1 = int((min(x) + X_Reference)/nm_p)
+                x2 = int((max(x) + X_Reference)/nm_p)
+                y1 = int((min(y) + Y_Reference)/nm_p)
+                y2 = int((max(y) + Y_Reference)/nm_p)
+                row = [title,x1, y1, x2, y2,id,cat]
+                if title.lower() != 'bg':
+                    box_list.append(row)
+        return box_list
+
+def get_referance(nm_p):
+        # slide = self.slideRead()
+
+        w = int(slide.properties.get('openslide.level[0].width'))
+        h = int(slide.properties.get('openslide.level[0].height'))
+
+        ImageCenter_X = (w/2)*nm_p
+        ImageCenter_Y = (h/2)*nm_p
+
+        OffSet_From_Image_Center_X = slide.properties.get(
+            'hamamatsu.XOffsetFromSlideCentre')
+        OffSet_From_Image_Center_Y = slide.properties.get(
+            'hamamatsu.YOffsetFromSlideCentre')
+
+        # print("offset from Img center units?", OffSet_From_Image_Center_X,OffSet_From_Image_Center_Y)
+
+        X_Ref = float(ImageCenter_X) - float(OffSet_From_Image_Center_X)
+        Y_Ref = float(ImageCenter_Y) - float(OffSet_From_Image_Center_Y)
+        return X_Ref, Y_Ref
+
 
 if __name__ == '__main__':
     
     # app.run(threaded=False)
-    app.run(debug=True)
+    # app.run(debug=True)
+    app.run()
     
     
 
