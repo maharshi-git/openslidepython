@@ -18,6 +18,7 @@ CORS(app)
 
 # annotations = ''
 
+OPENSLIDE_PATH = r'C:\Users\mahar\OneDrive\Documents\Custom Applciation\openseadragon\server\openslide-bin-4.0.0.2-windows-x64\bin'
 
 
 
@@ -30,11 +31,7 @@ if getattr(sys, 'frozen', False):
 else:
     # The application is running as a script
     current_dir = os.path.dirname(os.path.abspath(__file__))
-#tile_viwer = os.path.join(current_dir, 'openslide-win64-20230414', 'bin')
 
-# OPENSLIDE_PATH = r'C:\Users\mahar\OneDrive\Documents\Custom Applciation\openseadragon\server\openslide-bin-4.0.0.2-windows-x64\bin'
-OPENSLIDE_PATH = r'C:\Users\mahar\OneDrive\Documents\Custom Applciation\openseadragon\server\openslide-bin-4.0.0.2-windows-x64\bin'
-# print(OPENSLIDE_PATH)
 if hasattr(os, 'add_dll_directory'):
     # Python >= 3.8 on Windows
     with os.add_dll_directory(OPENSLIDE_PATH):
@@ -51,8 +48,14 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 dir = os.path.join(current_dir ,'static', 'tiles','C23 - 4007 - 2049765 - LSIL.ndpi')
 slide = openslide.open_slide(dir)
 
-dzi = DeepZoomGenerator(slide, tile_size=254, overlap=1)
+# dzi = DeepZoomGenerator(slide, tile_size=254, overlap=1)
 
+width, height = slide.dimensions
+
+# The 4 corner coordinates are (0, 0), (width, 0), (0, height), and (width, height)
+corners = [(0, 0), (width, 0), (0, height), (width, height)]
+
+print(corners)
 
 
     
@@ -75,11 +78,11 @@ def tileSlide():
     
     for i in range(len(predict_list)):
         title,x1,y1,x2,y2,id,cat = predict_list[i]
-        left = int(int((x1+x2)/2) - 255)
-        top = int(int((y1+y2)/2) - 255)
-        #add openSeaXCoord variable which is 1.628×10−5 x left
-        openSeaXCoord = 1.675e-5 * left
-        openSeaYCoord = 1.97e-5 * top
+        left = int(int((x1+x2)/2))
+        top = int(int((y1+y2)/2))
+     
+        openSeaXCoord = (1/width)*left
+        openSeaYCoord = (1/height) * top
     
         
         predictArr.append({
@@ -156,19 +159,24 @@ def get_image(annotNo):
     # tile = slide.read_region((32640 ,32640), 0, (510, 510))
     tile = slide.read_region((left ,top), 0, (510, 510))
     
+    tile = tile.convert('RGB')
+
+    np_img = np.array(tile)
+    np_img = get_bnc_adjusted(np_img,0)
+
+    # Convert the adjusted np_img back to a PIL Image
+    adjusted_tile = Image.fromarray(np_img)
+    
     output = BytesIO()
+    
+    adjusted_tile.save(output, format='JPEG')
+    tile_bytes = output.getvalue()
   
-    tile.convert("RGB").save(output, format='JPEG')
+    # tile.convert("RGB").save(output, format='JPEG')
     tile_bytes = output.getvalue()
     
     return Response(tile_bytes, mimetype='image/jpeg')
 
-# def readTile(annot):
-    
-#     centrCoord = annot['pointlist']['point']
-    
-#     image = slide.read_region((32640 ,32640), 6, (510, 510))
-#     return image
 
 @app.route('/tile/<int:level>/<int:row>_<int:col>.jpeg')
 def tile(level, row, col):
@@ -258,7 +266,7 @@ def getAnnotation():
         }
     }
     
-    with open('annotation.json', r'C:\Users\mahar\OneDrive\Documents\Custom Applciation\openseadragon\server\annotation.json') as f:
+    with open(r'C:\Users\mahar\OneDrive\Documents\Custom Applciation\openseadragon\server\annotation.json') as f:
         try:
             data_list = json.load(f)
         except json.JSONDecodeError:
@@ -380,6 +388,23 @@ def get_referance(nm_p):
         X_Ref = float(ImageCenter_X) - float(OffSet_From_Image_Center_X)
         Y_Ref = float(ImageCenter_Y) - float(OffSet_From_Image_Center_Y)
         return X_Ref, Y_Ref
+    
+def get_bnc_adjusted(img,clip=12):
+        hista,histb = np.histogram(img,255)        
+        total =0
+        n_rem= int((510*510*3*clip)/100)
+        for i in reversed(range(255)):
+            total +=hista[i]
+            if total > n_rem :
+                cut_off = int(histb[i])
+                break
+
+        alpha = 255/(cut_off)    
+        gamma = 0.8
+        img_stretched = np.clip(alpha*img, 0, 255)
+        img_gama =255 *pow((img_stretched/255),gamma)    
+        return img_gama.astype('uint8')
+    
 
 
 if __name__ == '__main__':
@@ -389,142 +414,4 @@ if __name__ == '__main__':
     app.run()
     
     
-
-# def process(self,pred): 
-#     pred = ['predict0', 43785, 2074, 44031, 2363, '0', 'AGUS']
-#     title,x1,y1,x2,y2,id,cat = pred 
-    
-#     tile_anote = []                
-#     # centre of annotation in pixels
-#     cx = int((x1+x2)/2)  # int(gt[1])
-#     cy = int((y1+y2)/2)  # int(gt[2])        
-#     # centering the Groundtruth
-#     # xc, yc = self.tile_size/2, self.tile_size/2
-#     xc, yc = 512/2, 512/2
-#     left = int(cx - xc)
-#     top = int(cy - yc)        
-#     # slide = self.slideRead()
-#     level = slide.get_best_level_for_downsample(1.0 / 40)        
-#     im_roi = slide.read_region((left, top), level, (512, 512))
-#     file = im_roi.convert('RGB')
-#     np_img = np.array(file)
-#     # b & C adjustment 
-#     # np_img = self.get_bnc_adjusted(np_img,clip=self.adjust_bnc_clip)         
-#     np_img = self.get_bnc_adjusted(np_img,clip=0)         
-#     # if self.adjust_bnc:
-#     #     np_img = self.get_bnc_adjusted(np_img,clip=12)         
-
-#     tile_anote=[]
-#     tile_box = (left, top, left+self.tile_size, top + self.tile_size)
-#     tile_anote = self.update_SameTile_annotes(self.predict_list, tile_box, tile_anote)
-#     if self.show_rect_mark:
-#         for k in range(len(tile_anote)):
-#             # draw the predict            
-#             # np_img = self.extract_nucleus(tile_anote[k], np_img)
-#             np_img = self.plot_one_box(tile_anote[k], np_img, color=(0, 255, 0))  
-#     # np_img = self.write_tile_title(np_img, title , color=(255, 255, 255)) 
-#     # print(id)   
-#     return np_img,id,title,cat
-
-    
-# def get_box_list(nm_p=221):
-#         # tree = ET.parse(self.xml_path)
-#         tree = ET.parse('C:/Users/mahar/Downloads/C23 - 4525 - 2053698 N.ndpi\\C23 - 5090 2 HSIL.ndpi.ndpa')
-#         root = tree.getroot()
-#         x1, y1, x2, y2 = 0, 0, 0, 0
-#         box_list = []
-#         X_Reference, Y_Reference = get_referance(nm_p=nm_p)
-#         # X_Reference, Y_Reference = self.get_referance(nm_p=nm_p)
-#         for elem in root.iter():
-#             # print(elem.tag)
-#             if elem.tag == 'ndpviewstate':
-#                 title = elem.find('title').text
-#                 cat = ""
-#                 if elem.find('cat') != None:
-#                     cat = elem.find('cat').text
-                
-#                 # cx = int((int(elem.find('x').text) + X_Reference)/nm_p)
-#                 # cy = int((int(elem.find('y').text) + Y_Reference)/nm_p)
-#                 id = elem.get("id")   # MOD
-
-#             x = []
-#             y = []
-#             if elem.tag == 'pointlist':
-#                 for sub in elem.iter(tag='point'):
-#                     x.append(int(sub.find('x').text))
-#                     y.append(int(sub.find('y').text))
-#                 x1 = int((min(x) + X_Reference)/nm_p)
-#                 x2 = int((max(x) + X_Reference)/nm_p)
-#                 y1 = int((min(y) + Y_Reference)/nm_p)
-#                 y2 = int((max(y) + Y_Reference)/nm_p)
-#                 row = [title,x1, y1, x2, y2,id,cat]
-#                 if title.lower() != 'bg':
-#                     box_list.append(row)
-#         return box_list
-    
-    
-# def get_referance(nm_p):
-#     slide = slideRead()
-
-#     w = int(slide.properties.get('openslide.level[0].width'))
-#     h = int(slide.properties.get('openslide.level[0].height'))
-
-#     ImageCenter_X = (w/2)*nm_p
-#     ImageCenter_Y = (h/2)*nm_p
-
-#     OffSet_From_Image_Center_X = slide.properties.get(
-#         'hamamatsu.XOffsetFromSlideCentre')
-#     OffSet_From_Image_Center_Y = slide.properties.get(
-#         'hamamatsu.YOffsetFromSlideCentre')
-
-#     # print("offset from Img center units?", OffSet_From_Image_Center_X,OffSet_From_Image_Center_Y)
-
-#     X_Ref = float(ImageCenter_X) - float(OffSet_From_Image_Center_X)
-#     Y_Ref = float(ImageCenter_Y) - float(OffSet_From_Image_Center_Y)
-#     return X_Ref, Y_Ref
-
-
-# def slideRead():
-#     openslide_formats = [
-#         "svs",
-#         "tif",
-#         "vms",
-#         "vmu",
-#         "ndpi",
-#         "scn",
-#         "mrxs",
-#         "tiff",
-#         "svslide",
-#         "bif",
-#         "tif"
-#     ]
-    
-#     wsi_path = 'C:/Users/mahar/Downloads/C23 - 4525 - 2053698 N.ndpi\\C23 - 5090 2 HSIL.ndpi'
-       
-#     if wsi_path.split('.')[-1] in openslide_formats:
-#         try:
-#             slide = openslide.open_slide(wsi_path)
-#             return slide
-#         except openslide.OpenSlideError as e:
-#             raise Exception("Error: Failed to open slide.") from e
-#     else:
-#         raise ValueError("Unsupported slide format.")
-
-
-# def get_bnc_adjusted(self,img,clip=12):
-#     hista,histb = np.histogram(img,255)        
-#     total =0
-#     # n_rem= int((self.tile_size*self.tile_size*3*clip)/100)
-#     n_rem= int((262144)/100)
-#     for i in reversed(range(255)):
-#         total +=hista[i]
-#         if total > n_rem :
-#             cut_off = int(histb[i])
-#             break
-
-#     alpha = 255/(cut_off)    
-#     gamma = 0.8
-#     img_stretched = np.clip(alpha*img, 0, 255)
-#     img_gama =255 *pow((img_stretched/255),gamma)    
-#     return img_gama.astype('uint8')
-
+ 
