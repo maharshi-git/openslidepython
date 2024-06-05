@@ -65,6 +65,34 @@ def get_directories(path):
     ]
     return dir_dict
 
+@app.route('/updateCategory/<id>/<new_value>')
+def updateCat(id, new_value):
+    filename = r'C:\Users\mahar\OneDrive\Documents\Custom Applciation\openseadragon\server\static\tiles\C23 - 4007 - 2049765 - LSIL.ndpi.ndpa'    
+    tree = ET.parse(filename)
+    root = tree.getroot()
+
+    # Find the <ndpviewstate> element with the specified id
+    ndpviewstate_element = root.find(f".//ndpviewstate[@id='{id}']")
+
+    if ndpviewstate_element is not None:
+        # Find the <cat> element within the <ndpviewstate> element
+        cat_element = ndpviewstate_element.find('.//cat')
+
+        # Update the value
+        if cat_element is not None:
+            cat_element.text = new_value
+        else:
+            # If there is no <cat> element, create one
+            cat_element = ET.SubElement(ndpviewstate_element, 'cat')
+            cat_element.text = new_value
+
+        # Save the updated XML back to the file
+        tree.write(filename, encoding='unicode')
+
+        return 'Category updated successfully'
+    else:
+        return f'No annotation found with id {id}'
+
 @app.route('/tileSlide', methods=['GET'])
 def tileSlide():
 #     # Get the specified tile
@@ -80,12 +108,12 @@ def tileSlide():
         openSeaYCoord = (1/height) * top    
         
         predictArr.append({
+            "id": id,
             "title": title,
             "x1": x1,
             "y1": y1,
             "x2": x2,
-            "y2": y2,
-            "id": id,
+            "y2": y2,            
             "cat": cat,
             "left": left,
             "top": top,
