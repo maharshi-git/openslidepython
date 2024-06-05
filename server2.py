@@ -43,12 +43,10 @@ else:
     
     
 current_dir = os.path.dirname(os.path.abspath(__file__))
-# C:\Users\mahar\OneDrive\Documents\Custom Applciation\openseadragon\server\static\tiles\C23 - 4007 - 2049765 - LSIL.ndpi
-# dir = os.path.join(current_dir ,'static', 'tiles','CMU-1.ndpi')
+
 dir = os.path.join(current_dir ,'static', 'tiles','C23 - 4007 - 2049765 - LSIL.ndpi')
 slide = openslide.open_slide(dir)
 
-# dzi = DeepZoomGenerator(slide, tile_size=254, overlap=1)
 
 width, height = slide.dimensions
 
@@ -56,9 +54,6 @@ width, height = slide.dimensions
 corners = [(0, 0), (width, 0), (0, height), (width, height)]
 
 print(corners)
-
-
-    
     
 
 def get_directories(path):
@@ -82,8 +77,7 @@ def tileSlide():
         top = int(int((y1+y2)/2))
      
         openSeaXCoord = (1/width)*left
-        openSeaYCoord = (1/height) * top
-    
+        openSeaYCoord = (1/height) * top    
         
         predictArr.append({
             "title": title,
@@ -105,16 +99,7 @@ def tileSlide():
     
     with open('test.json', 'w') as f:
         json.dump(returnObj, f)
-    
-    # dict_data = json.loads(returnObj)
-    # fields = dict_data[0].keys()
-    
-    # with open('output.txt', 'w', newline='') as f_output:
-    #     csv_writer = csv.DictWriter(f_output, fieldnames=fields, delimiter='\t')
-    #     csv_writer.writeheader()
-    #     csv_writer.writerows(dict_data)
-    
-    # annotations = read_file()
+
     return returnObj
 
 
@@ -149,14 +134,6 @@ def get_image(annotNo):
     left = int(cx - xc)
     top = int(cy - yc)     
     
-    # annotations = json.loads(annotations)
-    
-    # annotObj = annotations['annotations']['ndpviewstate'][int(annotNo)]
-    
-    # coordinateCentre = (annotObj['x'], annotObj['y'])
-    # print(coordinateCentre)
-    
-    # tile = slide.read_region((32640 ,32640), 0, (510, 510))
     tile = slide.read_region((left ,top), 0, (510, 510))
     
     tile = tile.convert('RGB')
@@ -204,6 +181,15 @@ def tile(level, row, col):
     # tile = slide.read_region((row*510*tile_width ,col*510*tile_width), zoomDiff, (510, 510)) #for level 6 the length and bredth is 800 and 596
     tile = slide.read_region((row*510*tile_width ,col*510*tile_width), zoomDiff, (510, 510)) #for level 6 the length and bredth is 800 and 596
     # tile = slide.read_region((row*30464 ,col*30464), zoomDiff, (510, 510)) #for level 6 the length and bredth is 800 and 596
+    
+    tile = tile.convert('RGB')
+
+    np_img = np.array(tile)
+    np_img = get_bnc_adjusted(np_img,0)
+
+    # Convert the adjusted np_img back to a PIL Image
+    tile = Image.fromarray(np_img)
+    
     
     # Convert the image data to JPEG format
     output = BytesIO()
