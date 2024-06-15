@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, send_file, request, Response
+from flask import Flask, jsonify, send_file, request, Response, send_from_directory
 from flask_cors import CORS
 # from openslide import open_slide
 from PIL import Image
@@ -65,8 +65,25 @@ def get_directories(path):
     ]
     return dir_dict
 
+# app = Flask(__name__, static_folder='static/build')
+
+# @app.route('/')
+# def serve_index():
+#     return send_from_directory('static/build', 'index.html')
+
+# # Serve other static files (CSS, JS, etc.)
+# @app.route('/static/<path:path>')
+# def serve_static(path):
+#     return send_from_directory('static/build/static', path)
+
+# # Serve manifest and other root-level files
+# @app.route('/<path:path>')
+# def serve_root_files(path):
+#     return send_from_directory('static/build', path)
+
 @app.route('/updateCategory/<id>/<new_value>')
 def updateCat(id, new_value):
+    
     filename = r'C:\Users\mahar\OneDrive\Documents\Custom Applciation\openseadragon\server\static\tiles\C23 - 4007 - 2049765 - LSIL.ndpi.ndpa'    
     tree = ET.parse(filename)
     root = tree.getroot()
@@ -194,8 +211,9 @@ def tile(level, row, col):
     
     slideNo = level - 7
     
-    test = [(51200, 38144), (25600, 19072), (12800, 9536), (6400, 4768), (3200, 2384), (1600, 1192), (800, 596), (400, 298), (200, 149), (100, 74.5)]
+    test = [(51000, 38144), (25600, 19072), (12800, 9536), (6400, 4768), (3200, 2384), (1600, 1192), (800, 596), (400, 298), (200, 149), (100, 74.5)]
 
+    # test2 = [(60928, 61440), (30464, 30720), (15232, 15360), (7616, 7680), (3808, 3840), (1904, 1920), (952, 960), (476, 480), (238, 240), (119, 120)]
     
     tile_width = test[slideNo][0]
     # tile_width = slide.level_dimensions[slideNo][0]
@@ -212,11 +230,11 @@ def tile(level, row, col):
     
     tile = tile.convert('RGB')
 
-    np_img = np.array(tile)
-    np_img = get_bnc_adjusted(np_img,0)
+    # np_img = np.array(tile)
+    # np_img = get_bnc_adjusted(np_img,0)
 
-    # Convert the adjusted np_img back to a PIL Image
-    tile = Image.fromarray(np_img)
+    # # Convert the adjusted np_img back to a PIL Image
+    # tile = Image.fromarray(np_img)
     
     
     # Convert the image data to JPEG format
@@ -302,6 +320,27 @@ def getSavedAnnotation():
     with open('annotation.json', 'r') as f:
         data = json.load(f)
     return jsonify(data)
+
+
+@app.route('/getDoctors', methods=['GET'])
+def getDoctors():
+    root_dir = r'C:\Users\mahar\OneDrive\Documents\Custom Applciation\openseadragon\server\static'  # Change this to the actual path where your root directory is located
+    # Initialize the final data structure
+    data = {"Doctor": []}
+    # Traverse the directory structure
+    for doctor in os.listdir(os.path.join(root_dir, 'tiles', 'Doctors')):
+        doctor_path = os.path.join(root_dir, 'tiles', 'Doctors', doctor)
+        if os.path.isdir(doctor_path):
+            patients = []
+            for patient in os.listdir(doctor_path):
+                patient_path = os.path.join(doctor_path, patient)
+                if os.path.isdir(patient_path):
+                    patients.append(patient)
+            data["Doctor"].append({"name": doctor, "patients": patients})
+
+    # Output the JSON
+    # json_output = jsonify(data)
+    return data['Doctor']
 
 @app.route('/deleteAnnotation', methods=['POST'])
 def deleteAnnotation():
