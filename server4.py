@@ -13,6 +13,8 @@ import numpy as np
 
 import csv
 
+import matplotlib.pyplot as plt
+
 app = Flask(__name__)
 CORS(app)
 
@@ -43,11 +45,21 @@ else:
     
     
 
+def plot_channel(channel, title, cmap='gray'):
+    plt.imshow(channel, cmap=cmap)
+    plt.title(title)
+    plt.axis('off')
+    
+    
+
 def initiateTile(Doctor, Patient):
 
     current_dir = os.path.dirname(os.path.abspath(__file__))
+    
+    tileName = Patient + '.ndpi'
 
-    dir = os.path.join(current_dir ,'static', 'tiles','C23 - 4007 - 2049765 - LSIL.ndpi')
+    # dir = os.path.join(current_dir ,'static', 'tiles','C23 - 4007 - 2049765 - LSIL.ndpi')
+    dir = os.path.join(current_dir ,'static', 'tiles', 'Doctors', Doctor, Patient, tileName)
     slide = openslide.open_slide(dir)
 
 
@@ -189,16 +201,41 @@ def get_image(Doctor, tileSlide, annotNo):
     tile = slide.read_region((left ,top), 0, (510, 510))
     
     tile = tile.convert('RGB')
+    
+    
+    
+#     rgb_data = np.array(tile)
 
-    np_img = np.array(tile)
-    np_img = get_bnc_adjusted(np_img,0)
+# # Create separate channels
+#     red_channel = rgb_data[:, :, 0]
+#     green_channel = rgb_data[:, :, 1]
+#     blue_channel = rgb_data[:, :, 2]
+    
+#     plt.figure(figsize=(12, 4))
 
-    # Convert the adjusted np_img back to a PIL Image
-    adjusted_tile = Image.fromarray(np_img)
+#     plt.subplot(1, 3, 1)
+#     plot_channel(red_channel, 'Red Channel', cmap='Reds')
+
+#     plt.subplot(1, 3, 2)
+#     plot_channel(green_channel, 'Green Channel', cmap='Greens')
+
+#     plt.subplot(1, 3, 3)
+#     plot_channel(blue_channel, 'Blue Channel', cmap='Blues')
+
+#     plt.tight_layout()
+#     plt.show()
+
+    # np_img = np.array(tile)
+    # np_img = get_bnc_adjusted(np_img,0)
+
+    # # Convert the adjusted np_img back to a PIL Image
+    # adjusted_tile = Image.fromarray(np_img)
     
     output = BytesIO()
     
-    adjusted_tile.save(output, format='JPEG')
+    # adjusted_tile.save(output, format='JPEG')
+    tile.save(output, format='JPEG')
+    
     tile_bytes = output.getvalue()
   
     # tile.convert("RGB").save(output, format='JPEG')
@@ -207,7 +244,7 @@ def get_image(Doctor, tileSlide, annotNo):
     return Response(tile_bytes, mimetype='image/jpeg')
 
 
-@app.route('/tile/Doctor/tileName/<int:level>/<int:row>_<int:col>.jpeg')
+@app.route('/tile/<Doctor>/<tileName>/<int:level>/<int:row>_<int:col>.jpeg')
 def tile(Doctor, tileName, level, row, col):
     
     # print(level, col, row)
@@ -215,7 +252,7 @@ def tile(Doctor, tileName, level, row, col):
     
     zoomDiff = 16 - level
 
-    print(slide.level_dimensions)
+    # print(slide.level_dimensions)
     
     slideNo = level - 7
     
@@ -224,12 +261,14 @@ def tile(Doctor, tileName, level, row, col):
     # test2 = [(60928, 61440), (30464, 30720), (15232, 15360), (7616, 7680), (3808, 3840), (1904, 1920), (952, 960), (476, 480), (238, 240), (119, 120)]
     
     tile_width = test[slideNo][0]
+    
+    print(tile_width, level)
     # tile_width = slide.level_dimensions[slideNo][0]
     
  
     tile_width = tile_width // 100
     
-    print(510*tile_width)
+    # print(510*tile_width)
     
     # tile = slide.read_region((row*32640 ,col*32640), level, (510, 510)) #for level 6 the length and bredth is 800 and 596
     # tile = slide.read_region((row*510*tile_width ,col*510*tile_width), zoomDiff, (510, 510)) #for level 6 the length and bredth is 800 and 596
@@ -267,7 +306,7 @@ def get_directory_structure():
 
 @app.route('/getAnnotation', methods=['POST'])
 def getAnnotation():
-    print('api hit')
+    # print('api hit')
     data = request.get_json()
 
     try:
@@ -408,8 +447,21 @@ def updateAnnotation():
 
 def get_box_list(Doctor, tileSlide):
     
+    # current_dir = os.path.dirname(os.path.abspath(__file__))
+    
+    # tileName = Patient + '.ndpi'
+
+    # # dir = os.path.join(current_dir ,'static', 'tiles','C23 - 4007 - 2049765 - LSIL.ndpi')
+    # dir = os.path.join(current_dir ,'static', 'tiles', 'Doctors', Doctor, Patient, tileName)
+    
         nm_p=221
-        tree = ET.parse(r'C:\Users\mahar\OneDrive\Documents\Custom Applciation\openseadragon\server\static\tiles\C23 - 4007 - 2049765 - LSIL.ndpi.ndpa')
+        
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        tileName = tileSlide + '.ndpa'
+        dir = os.path.join(current_dir ,'static', 'tiles', 'Doctors', Doctor, tileSlide, tileName)
+        
+        # tree = ET.parse(r'C:\Users\mahar\OneDrive\Documents\Custom Applciation\openseadragon\server\static\tiles\C23 - 4007 - 2049765 - LSIL.ndpi.ndpa')
+        tree = ET.parse(dir)
         root = tree.getroot()
         x1, y1, x2, y2 = 0, 0, 0, 0
         box_list = []
